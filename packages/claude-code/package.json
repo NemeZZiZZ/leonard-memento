@@ -1,0 +1,36 @@
+{
+  "name": "claude-code-memento",
+  "version": "0.1.0",
+  "description": "Amnesia insurance for Claude Code: injects your project's Markdown memory index into context compaction, so auto-summarization never forgets that memory exists. Zero dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "author": "NemeZZiZZ",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "claude-code-memento": "bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "hooks",
+    ".claude-plugin",
+    "README.md"
+  ],
+  "dependencies": {
+    "@leonard-memento/core": "*"
+  },
+  "keywords": [
+    "claude-code",
+    "memory",
+    "compaction",
+    "agent",
+    "context"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NemeZZiZZ/leonard-memento.git",
+    "directory": "packages/claude-code"
+  }
+}

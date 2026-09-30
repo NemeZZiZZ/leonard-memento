@@ -1,0 +1,5 @@
+{
+  "name": "claude-code-memento",
+  "version": "0.1.0",
+  "description": "Amnesia insurance for coding agents: injects your project's Markdown memory index into context compaction, so auto-summarization never forgets that memory exists. Zero dependencies."
+}

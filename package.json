@@ -1,0 +1,11 @@
+{
+  "name": "leonard-memento-repo",
+  "private": true,
+  "license": "MIT",
+  "author": "NemezziZZ",
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" },
+  "repository": { "type": "git", "url": "git+https://github.com/NemeZZiZZ/leonard-memento.git" }
+}

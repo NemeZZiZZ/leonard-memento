@@ -1,0 +1,13 @@
+{
+  "name": "leonard-memento",
+  "owner": {
+    "name": "NemeZZiZZ"
+  },
+  "plugins": [
+    {
+      "name": "claude-code-memento",
+      "source": "./packages/claude-code",
+      "description": "Amnesia insurance for Claude Code: injects your project's Markdown memory index into context compaction, so auto-summarization never forgets that memory exists. Zero dependencies."
+    }
+  ]
+}
