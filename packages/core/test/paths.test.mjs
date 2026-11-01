@@ -12,7 +12,10 @@ test("canonicalDir drops trailing slashes", () => {
   assert.equal(canonicalDir("/a/b///"), "/a/b");
 });
 
-test("canonicalDir resolves symlinks", () => {
+// Windows: creating a directory symlink needs Developer Mode or admin
+// (fs.symlinkSync → EPERM on stock CI runners), so the fixture itself is
+// unbuildable there — canonicalDir's realpath logic is covered on POSIX.
+test("canonicalDir resolves symlinks", { skip: process.platform === "win32" }, () => {
   const base = mkdtempSync(join(tmpdir(), "memento-paths-"));
   const real = join(base, "real");
   mkdirSync(real);

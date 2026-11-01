@@ -10,8 +10,11 @@ if (process.argv[2] === "hook") {
   } catch {
     // Truly impossible to continue — still never break the session.
   }
-  process.exit(0);
+  // Deliberately not process.exit(0): stdout pipe writes are asynchronous
+  // on Windows and an immediate exit can drop the JSON reply. Nothing keeps
+  // the loop alive once stdin reaches EOF, so the process still exits 0.
+  process.exitCode = 0;
+} else {
+  console.error("usage: claude-code-memento hook   (runs the SessionStart hook on stdin)");
+  process.exitCode = 2;
 }
-
-console.error("usage: claude-code-memento hook   (runs the SessionStart hook on stdin)");
-process.exit(2);

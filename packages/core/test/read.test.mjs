@@ -45,7 +45,9 @@ test("readProjectIndex returns null for whitespace-only file", async () => {
   assert.equal(await readProjectIndex(dir, { memoryRoot }), null);
 });
 
-test("read.mjs rejects unreadable index", async () => {
+// Windows: chmod only maps the write bit — a 0o000 file stays readable by
+// its owner, so the "unreadable index" state cannot be produced there.
+test("read.mjs rejects unreadable index", { skip: process.platform === "win32" }, async () => {
   const { memoryRoot, dir, memDir } = setup();
   const file = join(memDir, "MEMORY.md");
   writeFileSync(file, "- [[alpha]] — first fact\n");

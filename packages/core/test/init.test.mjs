@@ -104,10 +104,14 @@ test("init covers every text target", () =>
       assert.ok(existsSync(file), `${agent}: expected ${rel}`);
       assert.ok(readFileSync(file, "utf8").includes("<!-- memento:begin -->"), agent);
     }
-    // crush resolves under HOME, not the project dir
+    // crush resolves under HOME, not the project dir. os.homedir() reads
+    // HOME on POSIX but USERPROFILE on Windows — set both so the override
+    // holds on every platform.
     const home = mkdtempSync(join(tmpdir(), "memento-init-home-"));
     const savedHome = process.env.HOME;
+    const savedProfile = process.env.USERPROFILE;
     process.env.HOME = home;
+    process.env.USERPROFILE = home;
     try {
       const projectDir = tempProject();
       initAgent(projectDir, "crush");
@@ -117,6 +121,8 @@ test("init covers every text target", () =>
     } finally {
       if (savedHome === undefined) delete process.env.HOME;
       else process.env.HOME = savedHome;
+      if (savedProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = savedProfile;
     }
   }));
 
