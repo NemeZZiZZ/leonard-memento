@@ -36,6 +36,48 @@ export function memoryIndexPath(directory: string, options?: MemoryOptions): str
  */
 export function readProjectIndex(directory: string, options?: MemoryOptions): Promise<string | null>;
 
+/** Claude Code's project folder slug: the canonical path with separators as dashes. */
+export function claudeProjectSlug(projectDir: string): string;
+
+/** Claude Code auto-memory directory for a project (honors CLAUDE_CONFIG_DIR). */
+export function claudeMemoryDir(
+  projectDir: string,
+  overrides?: { home?: string; env?: Record<string, string | undefined>; claudeConfigDir?: string },
+): string;
+
+/** Split a fact file into front-matter fields and body (tolerant, never throws). */
+export function parseFactFile(raw: string): { fm: Record<string, string>; body: string };
+
+export interface SyncAction {
+  name: string;
+  direction: "imported" | "exported" | "updated" | "in-sync";
+  target?: "memento" | "claude";
+}
+
+export interface SyncReport {
+  dryRun: boolean;
+  claudeDir: string;
+  mementoDir: string;
+  actions: SyncAction[];
+  warnings: string[];
+  error: string | null;
+}
+
+export interface SyncClaudeOptions {
+  memoryRoot?: string;
+  env?: Record<string, string | undefined>;
+  home?: string;
+  claudeConfigDir?: string;
+  claudeDir?: string;
+  dryRun?: boolean;
+}
+
+/**
+ * Bidirectional fact sync between memento's tree and Claude Code auto memory.
+ * Never throws: problems land in `report.warnings` / `report.error`.
+ */
+export function syncClaude(projectDir: string, options?: SyncClaudeOptions): SyncReport;
+
 export interface InitTarget {
   kind: "text" | "json" | "print";
   file?: (projectDir: string) => string;

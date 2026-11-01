@@ -19,6 +19,8 @@ Usage:
   memento inject [--project DIR]  Print the injection block (silent, exit 0 when absent)
   memento init <agent> [--project DIR]  Write the agent's memory-index snippet (idempotent)
   memento init --list             List supported agents
+  memento sync claude [--project DIR] [--dry-run] [--claude-dir DIR]
+                                  Share facts with Claude Code auto memory (both ways)
   memento --help                  Show this help
   memento --version               Show the version
 `;
@@ -37,13 +39,16 @@ async function main(argv) {
       options: {
         project: { type: "string" },
         list: { type: "boolean" },
+        "dry-run": { type: "boolean" },
+        "claude-dir": { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
     });
   } catch (err) {
     console.error(`memento: ${err.message} — try 'memento --help'`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   const { values, positionals } = parsed;
   if (values.version) {
@@ -63,7 +68,8 @@ async function main(argv) {
       const indexPath = memoryIndexPath(projectDir);
       if (!existsSync(indexPath)) {
         console.error(`no memory index at ${indexPath} — create it, one fact per line: '- [[name]] — description'`);
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       console.log(indexPath);
       return;
@@ -81,7 +87,8 @@ async function main(argv) {
       const agent = positionals[1];
       if (!agent) {
         console.error("memento init: missing agent name — try 'memento init --list'");
-        process.exit(2);
+        process.exitCode = 2;
+        return;
       }
       try {
         const result = initAgent(projectDir, agent);
@@ -91,19 +98,51 @@ async function main(argv) {
       } catch (err) {
         if (err instanceof MementoError) {
           console.error(`memento: ${err.message}`);
-          process.exit(err.code === "UNKNOWN_AGENT" ? 2 : 1);
+          process.exitCode = err.code === "UNKNOWN_AGENT" ? 2 : 1;
+          return;
         }
         throw err;
       }
       return;
     }
+    case "sync": {
+      const target = positionals[1];
+      if (target !== "claude") {
+        console.error(`memento sync: unknown target '${target ?? ""}' — only 'claude' is supported`);
+        process.exitCode = 2;
+        return;
+      }
+      const { syncClaude } = await import("../src/sync-claude.mjs");
+      const report = syncClaude(projectDir, { claudeDir: values["claude-dir"], dryRun: values["dry-run"] });
+      if (report.error) {
+        console.error(`memento: ${report.error}`);
+        process.exitCode = 1;
+        return;
+      }
+      for (const action of report.actions.sort((a, b) => a.name.localeCompare(b.name))) {
+        const label =
+          action.direction === "imported"
+            ? `imported  ${action.name}  → memento`
+            : action.direction === "exported"
+              ? `exported  ${action.name}  → claude`
+              : action.direction === "updated"
+                ? `updated   ${action.name}  → ${action.target}`
+                : `in sync   ${action.name}`;
+        console.log(label);
+      }
+      for (const warning of report.warnings) console.error(`warning: ${warning}`);
+      const changed = report.actions.filter((a) => a.direction !== "in-sync").length;
+      console.log(`${report.dryRun ? "would change" : "changed"} ${changed} fact(s) — ${report.mementoDir} ⇄ ${report.claudeDir}`);
+      return;
+    }
     default:
       console.error(`memento: unknown subcommand '${command}' — try 'memento --help'`);
-      process.exit(2);
+      process.exitCode = 2;
+      return;
   }
 }
 
 main(process.argv.slice(2)).catch((err) => {
   console.error(`memento: ${err?.message ?? err}`);
-  process.exit(1);
+  process.exitCode = 1;
 });
