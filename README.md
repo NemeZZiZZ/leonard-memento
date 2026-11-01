@@ -1,5 +1,10 @@
 # leonard-memento
 
+[![npm](https://img.shields.io/npm/v/@leonard-memento/core?label=%40leonard-memento%2Fcore)](https://www.npmjs.com/package/@leonard-memento/core)
+[![npm](https://img.shields.io/npm/v/opencode-memento?label=opencode-memento)](https://www.npmjs.com/package/opencode-memento)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen)](https://github.com/NemeZZiZZ/leonard-memento)
+
 **Amnesia insurance for your coding agents.**
 
 When a coding agent compacts its context, the summarizer keeps only what it is shown — everything else evaporates. `leonard-memento` is a family of zero-dependency adapters that puts your project's curated Markdown memory index back in at that exact moment, in whatever agent you run: Total Recall, no trip to Rekall required.
@@ -91,7 +96,8 @@ No re-inking required.
 
 - Predecessor (archived): [opencode-memento](https://github.com/NemeZZiZZ/opencode-memento)
 - Release checklist: [RELEASE.md](RELEASE.md)
-- Design spec: kept locally (not published with the repo).
+
+If memento saved your agent from amnesia, a ⭐ helps other builders find it.
 
 ## License
 
