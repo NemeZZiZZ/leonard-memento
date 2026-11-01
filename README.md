@@ -81,9 +81,11 @@ memento path [--project DIR]    # absolute index path (exit 1 if absent)
 memento inject [--project DIR]  # the injection block (silent, exit 0 when absent)
 memento init <agent>            # idempotent setup
 memento init --list             # supported agents
+memento sync claude [--project DIR] [--dry-run] [--claude-dir DIR]
+                                 # share facts with Claude Code auto memory, both ways
 ```
 
-Environment: `MEMENTO_MEMORY_ROOT` overrides the root; `MEMENTO_INDEX_FILE` overrides the index file name.
+Environment: `MEMENTO_MEMORY_ROOT` overrides the root; `MEMENTO_INDEX_FILE` overrides the index file name. On Windows, hook commands resolve through npm's `.cmd` shims (keep the global npm bin directory on `PATH`); sync and the rest of the CLI are path-separator safe.
 
 ## Migrating from opencode-memento v1.0.0
 
@@ -96,6 +98,9 @@ No re-inking required.
 
 - Predecessor (archived): [opencode-memento](https://github.com/NemeZZiZZ/opencode-memento)
 - Release checklist: [RELEASE.md](RELEASE.md)
+- Comparison against mem0, claude-mem, Basic Memory, and native memory features: [docs/comparison.md](docs/comparison.md)
+- Sharing facts with Claude Code's native auto memory: [docs/claude-code-interop.md](docs/claude-code-interop.md)
+- Support matrix and how the guarantees are tested: [COMPATIBILITY.md](COMPATIBILITY.md)
 
 If memento saved your agent from amnesia, a ⭐ helps other builders find it.
 
