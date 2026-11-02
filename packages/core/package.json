@@ -1,6 +1,6 @@
 {
   "name": "@leonard-memento/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Amnesia insurance for coding agents: injects your project's Markdown memory index into context compaction, so auto-summarization never forgets that memory exists. Zero dependencies.",
   "type": "module",
   "license": "MIT",
