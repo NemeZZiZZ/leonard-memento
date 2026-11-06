@@ -27,7 +27,9 @@ Publishing is deliberately manual. No changesets, no provenance automation.
    npm publish -w packages/codex
    ```
 6. Tag: `git tag vX.Y.Z && git push --tags` (family version = the core
-   version being released).
+   version being released). Version convention: every package shares the
+   core's minor.patch — `claude-code-memento`/`codex-memento` at `0.Y.Z`,
+   `opencode-memento` at `1.Y.Z` (its published lineage keeps major 1).
 
 ## Post-release (one-time, after the first family release)
 
