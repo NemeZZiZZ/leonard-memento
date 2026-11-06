@@ -1,6 +1,6 @@
 {
   "name": "opencode-memento",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Amnesia insurance for OpenCode: injects your project's Markdown memory index into session compaction, so auto-summarization never forgets that memory exists. Zero dependencies.",
   "license": "MIT",
   "type": "module",
