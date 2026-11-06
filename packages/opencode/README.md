@@ -63,6 +63,25 @@ sibling fact files carrying front-matter (`name`, `description`, `type`,
 dates). Curate it yourself — the plugin only guarantees it survives
 compaction.
 
+## Design: no tools, no writes
+
+The plugin registers no tools and never calls the `memory` tool of other
+plugins. That is the design, not a gap:
+
+- A tool the model may skip is exactly the hole memento exists to plug.
+  Injection rides the `context` and `compaction` hooks, so it fires
+  whether or not the model remembers that memory exists — there is no
+  race to lose.
+- Zero dependencies is the point: no embedding model, no vector store,
+  nothing to initialize. Plain `node:fs`.
+- After injection the agent opens fact files by their absolute paths with
+  its normal `read` tool — enough for recall without a custom tool.
+- Semantic search over memory is a separate job. Pair memento with a
+  reference system such as
+  [@npv12/opencode-memory-md](https://github.com/npv12/opencode-memory-md)
+  if you need one: storage trees are disjoint (`~/.config/memento` vs
+  their `~/.config/opencode/memory`), so both run fine in one session.
+
 ## Compatibility
 
 - **OpenCode 1.18.x** — verified live on 1.18.33. V1's loader registers only
