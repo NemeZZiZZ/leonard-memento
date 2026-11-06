@@ -80,3 +80,28 @@ test("unknown subcommand exits 2", async () => {
   const r = await run(["bogus"]);
   assert.equal(r.code, 2);
 });
+
+// --- M10: invalid config on the read path warns once, stays silent on stdout, exits 0 ---
+
+test("inject warns once on stderr and exits 0 when the memory root is invalid", async () => {
+  const { projectDir } = fixture();
+  const r = await run(["inject", "--project", projectDir], { env: { MEMENTO_MEMORY_ROOT: "~/mem" } });
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "");
+  const lines = r.stderr.trimEnd().split("\n");
+  assert.equal(lines.length, 1, `expected one warning line, got: ${JSON.stringify(r.stderr)}`);
+  assert.match(lines[0], /^memento: /);
+  assert.doesNotMatch(lines[0], /memento: memento:/);
+  assert.match(lines[0], /memory root/);
+});
+
+test("inject warns once and exits 0 when the index file name is invalid", async () => {
+  const { memoryRoot, projectDir } = fixture();
+  const r = await run(["inject", "--project", projectDir], {
+    env: { MEMENTO_MEMORY_ROOT: memoryRoot, MEMENTO_INDEX_FILE: "../secrets.md" },
+  });
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "");
+  assert.doesNotMatch(r.stderr, /memento: memento:/);
+  assert.match(r.stderr, /indexFile/);
+});

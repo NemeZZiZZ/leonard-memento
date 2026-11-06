@@ -166,3 +166,12 @@ test("memoryIndexPath keeps plain index file names working", () => {
     join("/root", projectHash("/a/b"), "INDEX.md"),
   );
 });
+
+// --- M9: non-string directory ---
+
+test("projectHash and memoryIndexPath reject a non-string directory loudly", () => {
+  for (const bad of [undefined, null, 42, {}, ["/a"]]) {
+    assert.throws(() => projectHash(bad), /directory/, `projectHash(${JSON.stringify(bad)})`);
+    assert.throws(() => memoryIndexPath(bad, { memoryRoot: "/root" }), /directory/, `memoryIndexPath(${JSON.stringify(bad)})`);
+  }
+});

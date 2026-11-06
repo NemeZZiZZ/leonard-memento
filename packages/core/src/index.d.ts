@@ -4,7 +4,11 @@
 /** Resolve symlinks (like `pwd -P`) and drop trailing slashes (POSIX and Windows). */
 export function canonicalDir(dir: string): string;
 
-/** First 16 hex chars of sha256 of the canonical project path. */
+/**
+ * First 16 hex chars of sha256 of the canonical project path.
+ * Throws on a non-string/empty directory or a `~`-relative one (nothing in
+ * the chain expands `~`, so hashing the literal would resolve the wrong tree).
+ */
 export function projectHash(dir: string): string;
 
 export interface ResolveMemoryRootOverrides {
@@ -23,16 +27,25 @@ export interface ResolveMemoryRootOverrides {
 export function resolveMemoryRoot(overrides?: ResolveMemoryRootOverrides): string;
 
 export interface MemoryOptions {
+  /** Absolute path; `~`-relative roots are rejected. Defaults to MEMENTO_MEMORY_ROOT / resolveMemoryRoot(). */
   memoryRoot?: string;
+  /** Plain file name only (no separators, traversal or `~`). Defaults to MEMENTO_INDEX_FILE / "MEMORY.md". */
   indexFile?: string;
 }
 
-/** Absolute path of the memory index for a project directory. */
+/**
+ * Absolute path of the memory index for a project directory.
+ * Throws (plain Error, message prefixed `memento: `) on an invalid directory,
+ * a `~`-relative memory root, or a non-plain indexFile — loud for the caller,
+ * never silently pointing at the wrong tree.
+ */
 export function memoryIndexPath(directory: string, options?: MemoryOptions): string;
 
 /**
  * The frozen injection block for a project, or null when the project has no
  * memory yet. Byte-identical to opencode-memento v1.0.0.
+ * Read failures degrade to null; invalid configuration throws like
+ * memoryIndexPath (adapters catch it so the host is never crashed).
  */
 export function readProjectIndex(directory: string, options?: MemoryOptions): Promise<string | null>;
 
@@ -65,6 +78,8 @@ export interface SyncReport {
 
 export interface SyncClaudeOptions {
   memoryRoot?: string;
+  /** Memento-side index file name (plain name). Defaults to MEMENTO_INDEX_FILE / "MEMORY.md". */
+  indexFile?: string;
   env?: Record<string, string | undefined>;
   home?: string;
   claudeConfigDir?: string;
@@ -97,12 +112,22 @@ export interface InitResult {
   hint: string;
 }
 
+export type MementoErrorCode =
+  | "UNKNOWN_AGENT"
+  | "NOT_WRITABLE"
+  | "INVALID_JSON"
+  | "INVALID_JSON_SHAPE"
+  | "UNPAIRED_MARKER";
+
 export class MementoError extends Error {
-  code: string;
+  code: MementoErrorCode;
 }
 
 /**
  * Idempotent setup of the memory-index integration for one agent.
- * Throws MementoError (code UNKNOWN_AGENT / NOT_WRITABLE / INVALID_JSON).
+ * Throws MementoError: UNKNOWN_AGENT, NOT_WRITABLE, INVALID_JSON (unparsable),
+ * INVALID_JSON_SHAPE (root or `hooks` is not an object), UNPAIRED_MARKER
+ * (a stray begin/end marker in the rules file — fixed by hand, never appended to).
+ * Writes are atomic (temp file + rename), follow symlinked targets and keep the mode.
  */
 export function initAgent(projectDir: string, agent: string): InitResult;

@@ -62,6 +62,20 @@ test("hook pushes text payload", async () => {
   assert.deepEqual(event.system[0], { type: "text", text: expected });
 });
 
+test("both context and compaction hooks inject the same frozen block", async () => {
+  const memoryRoot = rootWithIndex("/real");
+  const { ctx, hooks } = fakeV2Context({ options: { memoryRoot } });
+  await plugin.setup(ctx);
+  const expected = await readProjectIndex("/real", { memoryRoot });
+  for (const name of ["context", "compaction"]) {
+    const h = hooks.find((x) => x.name === name);
+    assert.ok(h, `${name} hook not registered`);
+    const event = { system: [] };
+    await h.cb(event);
+    assert.deepEqual(event.system, [{ type: "text", text: expected }], `${name} hook payload`);
+  }
+});
+
 test("hook is silent without index", async () => {
   const memoryRoot = mkdtempSync(join(tmpdir(), "memento-opc-empty-"));
   const { captured, ctx } = fakeV2Context({ options: { memoryRoot } });
@@ -126,10 +140,45 @@ test("v1 server is silent without index", async () => {
   }
 });
 
-// V1 1.18.33 registers only FUNCTION exports of shape
-// `(input, options?) => Promise<Hooks>` — plain object exports are silently
-// ignored (verified against the binary and live sessions). MementoPlugin is
-// that function entrypoint; the default export object serves OpenCode 2.x.
+// V1 >= 1.3.4 (through 1.19.x) sees `default` has `id`/`server` and calls
+// `default.server(input, options)` — the tuple options from
+// `["npm:opencode-memento", { ... }]` arrive as the second argument. These
+// tests pin that path without env vars.
+
+test("v1 server honors tuple options (memoryRoot) without env vars", async () => {
+  const memoryRoot = rootWithIndex("/v1proj");
+  const hooks = await plugin.server({ directory: "/v1proj" }, { memoryRoot });
+  const output = { context: [] };
+  await hooks["experimental.session.compacting"](null, output);
+  const expected = await readProjectIndex("/v1proj", { memoryRoot });
+  assert.deepEqual(output.context, [expected]);
+});
+
+test("v1 server honors tuple options (indexFile)", async () => {
+  const memoryRoot = rootWithIndex("/v1proj", { indexFile: "INDEX.md" });
+  const hooks = await plugin.server({ directory: "/v1proj" }, { memoryRoot, indexFile: "INDEX.md" });
+  const output = { context: [] };
+  await hooks["experimental.session.compacting"](null, output);
+  assert.equal(output.context.length, 1);
+});
+
+test("v1 server never throws on an invalid tuple option", async () => {
+  const hooks = await plugin.server({ directory: "/v1proj" }, { memoryRoot: "~/bad" });
+  const output = { context: [] };
+  await hooks["experimental.session.compacting"](null, output);
+  assert.deepEqual(output.context, []);
+});
+
+test("v1 server tolerates a missing plugin input", async () => {
+  const memoryRoot = mkdtempSync(join(tmpdir(), "memento-opc-v1srv-noctx-"));
+  const hooks = await plugin.server(undefined, { memoryRoot });
+  const output = { context: [] };
+  await hooks["experimental.session.compacting"](null, output);
+  assert.deepEqual(output.context, []);
+});
+
+// The named function export is the fallback for the pre-1.3.4 loader
+// (`getLegacyPlugins`), which registered function exports only.
 
 test("v1 named export is a function returning compaction hooks", async () => {
   assert.equal(typeof adapter.MementoPlugin, "function");

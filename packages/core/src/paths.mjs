@@ -20,7 +20,10 @@ export function canonicalDir(dir) {
 
 /** First 16 hex chars of sha256 of the canonical project path. */
 export function projectHash(dir) {
-  if (typeof dir === "string" && dir.startsWith("~")) {
+  if (typeof dir !== "string" || dir === "") {
+    throw new Error(`memento: project directory must be a non-empty path string, got ${JSON.stringify(dir) ?? typeof dir}`);
+  }
+  if (dir.startsWith("~")) {
     // Nothing in the chain expands the homedir, so hashing the literal
     // would silently resolve the WRONG project. Fail loudly instead —
     // every adapter hook wraps reads in try/catch, so hosts stay safe.
@@ -44,25 +47,45 @@ export function resolveMemoryRoot({ env = process.env, home = homedir(), exists 
   return exists(neutral) ? neutral : exists(legacy) ? legacy : neutral;
 }
 
+/**
+ * Why a memory root is unusable, or null when it is fine. Shared by the
+ * read path (memoryIndexPath, throws) and sync (reports, never throws).
+ */
+export function memoryRootProblem(root) {
+  if (typeof root !== "string" || root === "") {
+    return `memento: memory root must be a non-empty path string: '${String(root)}'`;
+  }
+  if (root.startsWith("~")) {
+    // Same failure class projectHash guards against: nothing expands '~',
+    // so joining the literal would silently resolve the WRONG tree.
+    return `memento: '~'-relative memory root is not supported, pass an absolute path: '${root}'`;
+  }
+  return null;
+}
+
 /** Absolute path of the memory index for a project directory. */
+/**
+ * Why an index file name is unusable (message), or null when it is fine.
+ * Basename only: a name with separators or traversal could point outside
+ * the project's memory dir (options arrive from plugin config in cloned
+ * repos), and the file content goes straight into the prompt.
+ */
+export function indexFileProblem(file) {
+  if (typeof file !== "string" || file === "" || file === "." || file === ".." || file.includes("/") || file.includes("\\") || file.startsWith("~")) {
+    return `memento: indexFile must be a plain file name (no path separators, traversal, or '~'): '${file}'`;
+  }
+  return null;
+}
+
+/** The index file name after option → env → default resolution (unvalidated). */
+export function resolveIndexFile(indexFile, env = process.env) {
+  return indexFile ?? env.MEMENTO_INDEX_FILE ?? "MEMORY.md";
+}
+
 export function memoryIndexPath(directory, { memoryRoot, indexFile } = {}) {
   const root = memoryRoot ?? process.env.MEMENTO_MEMORY_ROOT ?? resolveMemoryRoot();
-  if (typeof root === "string" && root.startsWith("~")) {
-    // Same failure class projectHash guards against: nothing expands '~',
-    // so joining the literal would silently resolve the WRONG tree. Fail
-    // loudly — every adapter hook wraps reads in try/catch, hosts stay safe.
-    throw new Error(
-      `memento: '~'-relative memory root is not supported, pass an absolute path: '${root}'`,
-    );
-  }
-  const file = indexFile ?? process.env.MEMENTO_INDEX_FILE ?? "MEMORY.md";
-  if (typeof file !== "string" || file === "" || file === "." || file === ".." || file.includes("/") || file.includes("\\") || file.startsWith("~")) {
-    // Basename only: an indexFile with separators or traversal could point
-    // outside the project's memory dir (options arrive from plugin config
-    // in cloned repos), and the file content goes straight into the prompt.
-    throw new Error(
-      `memento: indexFile must be a plain file name (no path separators, traversal, or '~'): '${file}'`,
-    );
-  }
-  return join(root, projectHash(directory), file);
+  // Fail loudly — every adapter hook wraps reads in try/catch, hosts stay safe.
+  const problem = memoryRootProblem(root) ?? indexFileProblem(resolveIndexFile(indexFile));
+  if (problem) throw new Error(problem);
+  return join(root, projectHash(directory), resolveIndexFile(indexFile));
 }

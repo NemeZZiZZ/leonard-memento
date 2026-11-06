@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { canonicalDir, projectHash, resolveMemoryRoot } from "./paths.mjs";
+import { canonicalDir, indexFileProblem, memoryRootProblem, projectHash, resolveIndexFile, resolveMemoryRoot } from "./paths.mjs";
 import { writeAtomicSync } from "./atomic.mjs";
 
 /** Claude Code's project folder slug: absolute path with separators as dashes. */
@@ -85,10 +85,10 @@ function descriptionOf(fact) {
 }
 
 /**
- * Load every fact file from a memory tree (anything *.md except MEMORY.md).
+ * Load every fact file from a memory tree (anything *.md except the index file).
  * Returns null when the directory does not exist, never throws.
  */
-function loadFacts(dir, warnings = []) {
+function loadFacts(dir, warnings = [], indexName = "MEMORY.md") {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -97,7 +97,7 @@ function loadFacts(dir, warnings = []) {
   }
   const facts = new Map();
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === "MEMORY.md") continue;
+    if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === indexName || entry.name === "MEMORY.md") continue;
     let raw;
     try {
       raw = readFileSync(join(dir, entry.name), "utf8");
@@ -130,12 +130,9 @@ function appendMissingIndexLines(indexPath, facts, { header } = {}) {
   } catch {
     // No index yet — a fresh one starts with the conventional header.
   }
-  const existing = new Set();
-  for (const line of content.split(/\r?\n/)) {
-    const link = line.match(/\[\[([^\]]+)\]\]/);
-    if (link) existing.add(link[1]);
-  }
-  const missing = [...facts.keys()].filter((name) => !existing.has(name)).sort();
+  // Exact-token match: a greedy `[[...]]` regex would mis-split names that
+  // themselves contain `]]` and re-append them on every run.
+  const missing = [...facts.keys()].filter((name) => !content.includes(`[[${name}]]`)).sort();
   if (missing.length === 0) return { appended: [], lines: content.split(/\r?\n/).length };
 
   const freshLines = missing.map((name) => indexLine(name, facts.get(name))).join("\n") + "\n";
@@ -157,6 +154,7 @@ export function syncClaude(projectDir, {
   home,
   claudeConfigDir,
   claudeDir,
+  indexFile,
   dryRun = false,
 } = {}) {
   const claudeMemory = claudeDir ?? claudeMemoryDir(projectDir, { home, env, claudeConfigDir });
@@ -165,6 +163,15 @@ export function syncClaude(projectDir, {
 
   const report = { dryRun, claudeDir: claudeMemory, mementoDir, actions: [], warnings: [], error: null };
 
+  const indexName = resolveIndexFile(indexFile, env);
+  const rootProblem = memoryRootProblem(root) ?? indexFileProblem(indexName);
+  if (rootProblem) {
+    // Same guard memoryIndexPath applies on the read path: a '~' nobody
+    // expands would silently create and populate a literal `./~/…` tree.
+    report.error = rootProblem;
+    return report;
+  }
+
   const claudeFacts = loadFacts(claudeMemory, report.warnings);
   if (claudeFacts === null) {
     report.error =
@@ -172,7 +179,7 @@ export function syncClaude(projectDir, {
       `(so it creates auto memory), or pass --claude-dir`;
     return report;
   }
-  const mementoFacts = loadFacts(mementoDir, report.warnings) ?? new Map();
+  const mementoFacts = loadFacts(mementoDir, report.warnings, indexName) ?? new Map();
 
   const write = (path, raw) => {
     if (dryRun) return true;
@@ -212,7 +219,7 @@ export function syncClaude(projectDir, {
     } else if (claudeFact && mementoFact) {
       if (claudeFact.raw === mementoFact.raw) {
         report.actions.push({ name, direction: "in-sync" });
-      } else if (claudeFact.ts === mementoFact.ts) {
+      } else if (tsCompare(claudeFact.ts, mementoFact.ts) === 0) {
         report.warnings.push(`conflict on '${name}': both sides changed (same timestamp) — edit one side and re-run`);
       } else {
         const newerIsClaude = tsCompare(claudeFact.ts, mementoFact.ts) > 0;
@@ -229,7 +236,7 @@ export function syncClaude(projectDir, {
 
   const changed = report.actions.some((a) => a.direction !== "in-sync");
   if (changed && !dryRun) {
-    appendMissingIndexLines(join(mementoDir, "MEMORY.md"), mementoFacts, { header: "# Memory Index" });
+    appendMissingIndexLines(join(mementoDir, indexName), mementoFacts, { header: "# Memory Index" });
     const claudeResult = appendMissingIndexLines(join(claudeMemory, "MEMORY.md"), claudeFacts);
     if (claudeResult.lines > 200) {
       report.warnings.push(

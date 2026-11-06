@@ -25,6 +25,12 @@ Usage:
   memento --version               Show the version
 `;
 
+/** One `memento: …` line for stderr; core errors already carry the prefix. */
+function warnLine(err) {
+  const message = String(err?.message ?? err);
+  return message.startsWith("memento: ") ? message : `memento: ${message}`;
+}
+
 function ownVersion() {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   return pkg.version;
@@ -65,7 +71,14 @@ async function main(argv) {
 
   switch (command) {
     case "path": {
-      const indexPath = memoryIndexPath(projectDir);
+      let indexPath;
+      try {
+        indexPath = memoryIndexPath(projectDir);
+      } catch (err) {
+        console.error(warnLine(err));
+        process.exitCode = 1;
+        return;
+      }
       if (!existsSync(indexPath)) {
         console.error(`no memory index at ${indexPath} — create it, one fact per line: '- [[name]] — description'`);
         process.exitCode = 1;
@@ -75,7 +88,16 @@ async function main(argv) {
       return;
     }
     case "inject": {
-      const text = await readProjectIndex(projectDir);
+      // Read path: invalid config (bad root / index file name) is reported
+      // once on stderr but never breaks the caller — stdout stays empty and
+      // the exit code stays 0, exactly like "no memory yet".
+      let text;
+      try {
+        text = await readProjectIndex(projectDir);
+      } catch (err) {
+        console.error(warnLine(err));
+        return;
+      }
       if (text) process.stdout.write(text + "\n");
       return;
     }
@@ -115,7 +137,7 @@ async function main(argv) {
       const { syncClaude } = await import("../src/sync-claude.mjs");
       const report = syncClaude(projectDir, { claudeDir: values["claude-dir"], dryRun: values["dry-run"] });
       if (report.error) {
-        console.error(`memento: ${report.error}`);
+        console.error(warnLine(report.error));
         process.exitCode = 1;
         return;
       }
@@ -143,6 +165,6 @@ async function main(argv) {
 }
 
 main(process.argv.slice(2)).catch((err) => {
-  console.error(`memento: ${err?.message ?? err}`);
+  console.error(warnLine(err));
   process.exitCode = 1;
 });

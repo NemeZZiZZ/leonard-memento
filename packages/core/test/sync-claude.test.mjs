@@ -227,3 +227,87 @@ test("duplicate fact names in one tree produce a warning", () => {
     `expected a duplicate-name warning, got: ${JSON.stringify(report.warnings)}`,
   );
 });
+
+// --- M2/M5: instant-aware conflict detection + validated memory root ---
+
+test("same instant in different offsets with different content is a conflict, not an overwrite", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  // 10:00+03:00 and 07:00Z are the SAME instant.
+  writeFileSync(join(claudeDir, "note.md"), "---\nupdated: 2026-11-01T10:00:00+03:00\n---\nclaude side\n");
+  const mementoDir = join(tmpRoot, "memento", projectHash(proj));
+  mkdirSync(mementoDir, { recursive: true });
+  writeFileSync(join(mementoDir, "note.md"), "---\nupdated: 2026-11-01T07:00:00Z\n---\nmemento side\n");
+
+  const report = syncClaude(proj, { claudeDir, memoryRoot: join(tmpRoot, "memento") });
+
+  assert.equal(report.error, null);
+  assert.ok(report.warnings.some((w) => /conflict on 'note'/.test(w)), JSON.stringify(report.warnings));
+  assert.equal(report.actions.some((a) => a.name === "note" && a.direction === "updated"), false);
+  assert.equal(readFileSync(join(claudeDir, "note.md"), "utf8").includes("claude side"), true);
+  assert.equal(readFileSync(join(mementoDir, "note.md"), "utf8").includes("memento side"), true);
+});
+
+test("sync refuses a '~'-relative memory root instead of creating a literal '~' directory", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "note.md"), "---\nmodified: 2026-11-01T07:00:00Z\n---\nclaude side\n");
+
+  for (const opts of [{ memoryRoot: "~/mem" }, { env: { MEMENTO_MEMORY_ROOT: "~/mem" } }]) {
+    const report = syncClaude(proj, { claudeDir, ...opts });
+    assert.match(report.error ?? "", /memory root/, JSON.stringify(report));
+    assert.deepEqual(report.actions, []);
+  }
+  assert.equal(existsSync(join(process.cwd(), "~")), false);
+});
+
+// --- M8/M12: index-line detection for odd names + MEMENTO_INDEX_FILE ---
+
+test("a fact name containing ']]' is appended to the index once, not on every sync", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "odd.md"), "---\nname: odd]]name\nupdated: 2026-11-01T08:00:00Z\n---\nbody\n");
+  const memoryRoot = join(tmpRoot, "memento");
+
+  syncClaude(proj, { claudeDir, memoryRoot });
+  const indexPath = join(memoryRoot, projectHash(proj), "MEMORY.md");
+  const first = readFileSync(indexPath, "utf8");
+  // Second run: claude side now has the fact mirrored, force a change so indexes are re-checked.
+  writeFileSync(join(claudeDir, "other.md"), "---\nupdated: 2026-11-01T09:00:00Z\n---\nx\n");
+  syncClaude(proj, { claudeDir, memoryRoot });
+  const second = readFileSync(indexPath, "utf8");
+
+  assert.equal(first.split("[[odd]]name]]").length - 1, 1);
+  assert.equal(second.split("[[odd]]name]]").length - 1, 1, `index re-appended the odd name:\n${second}`);
+});
+
+test("sync honors the configured memento index file name instead of hard-coding MEMORY.md", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "fact.md"), "---\nupdated: 2026-11-01T08:00:00Z\n---\nbody\n");
+  const memoryRoot = join(tmpRoot, "memento");
+  const mementoDir = join(memoryRoot, projectHash(proj));
+  mkdirSync(mementoDir, { recursive: true });
+  // A custom-named index on the memento side must not be treated as a fact.
+  writeFileSync(join(mementoDir, "INDEX.md"), "# Memory Index\n");
+
+  const report = syncClaude(proj, { claudeDir, memoryRoot, env: { MEMENTO_INDEX_FILE: "INDEX.md" } });
+
+  assert.equal(report.error, null);
+  assert.ok(!existsSync(join(claudeDir, "INDEX.md")), "the memento index leaked into claude memory as a fact");
+  assert.ok(!existsSync(join(mementoDir, "MEMORY.md")), "sync created MEMORY.md despite MEMENTO_INDEX_FILE");
+  assert.match(readFileSync(join(mementoDir, "INDEX.md"), "utf8"), /\[\[fact\]\]/);
+});
+
+test("sync reports an invalid index file name as an error, not a throw", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  const report = syncClaude(proj, { claudeDir, memoryRoot: join(tmpRoot, "memento"), indexFile: "../x.md" });
+  assert.match(report.error, /indexFile/);
+  assert.deepEqual(report.actions, []);
+});

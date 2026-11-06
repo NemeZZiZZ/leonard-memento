@@ -7,12 +7,15 @@
 //
 // Zero dependencies by design. One file serves both plugin APIs:
 //   - OpenCode 2.x: the default export, a plain { id, setup } object
-//     (no Plugin.define import needed);
-//   - OpenCode 1.18.x: the named MementoPlugin function export — verified
-//     against 1.18.33, whose loader registers only function exports of
-//     shape `(input, options?) => Promise<Hooks>` and silently ignores
-//     plain object exports; local auto-discovery matches only
-//     `.opencode/plugin(s)/*.ts|*.js` (no .mjs).
+//     (no Plugin.define import needed); the extra `server` key is tolerated
+//     and never called;
+//   - OpenCode 1.3.4 – 1.19.x: the loader sees `default` has `id`/`server`
+//     and calls `default.server(input, options)` — `options` is the tuple
+//     form `["npm:opencode-memento", { ... }]` from the config. Named
+//     function exports are NOT reached on this path;
+//   - OpenCode 1.0 – 1.3.3: the loader registered function exports only —
+//     the named MementoPlugin export is kept as that fallback.
+//   Local auto-discovery matches only `.opencode/plugin(s)/*.ts|*.js` (no .mjs).
 //
 // Every hook body is wrapped in try/catch: a failing memory lookup must
 // never break a compaction or a session.
@@ -38,29 +41,14 @@ function optionsFrom(value) {
 }
 
 /**
- * Legacy V1 entrypoint, kept for older 1.x loaders said to call server()
- * directly. This path has no options argument, so MEMENTO_* env vars are
- * the configuration channel.
- */
-async function server({ directory }) {
-  return {
-    "experimental.session.compacting": async (_input, output) => {
-      try {
-        const text = await readProjectIndex(directory);
-        if (text) output.context.push(text);
-      } catch {
-        // A failing hook must never break a session.
-      }
-    },
-  };
-}
-
-/**
- * V1 plugin entrypoint (verified live against OpenCode 1.18.33): a named
- * function export of shape `(input, options?) => Promise<Hooks>`. `input`
+ * V1 hook factory of shape `(input, options?) => Promise<Hooks>`. `input`
  * is V1's PluginInput `{ client, project, directory, $ }`; `options`
  * arrives from the tuple config form `["npm:opencode-memento", { ... }]`
  * and falls back to the MEMENTO_* env vars when absent.
+ *
+ * Reached two ways: as `default.server(input, options)` on OpenCode
+ * >= 1.3.4 (the live path), and as the named export on the pre-1.3.4
+ * loader, which registered function exports only.
  *
  * @param {{ directory?: string } | undefined} input - V1 PluginInput
  * @param {MementoOptions} [options] - tuple-form options from the config
@@ -100,5 +88,6 @@ export default {
     await ctx.session.hook("context", hook);
     await ctx.session.hook("compaction", hook);
   },
-  server,
+  /** V1 >= 1.3.4 entrypoint: the host passes the tuple options as the second argument. */
+  server: (input, options) => MementoPlugin(input, options),
 };

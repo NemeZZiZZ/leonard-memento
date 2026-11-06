@@ -23,12 +23,14 @@ export class MementoError extends Error {
 function upsertBlock(existing, blockText) {
   const begin = existing.indexOf(MARKER_BEGIN);
   const end = existing.indexOf(MARKER_END);
-  if (begin !== -1 && (end === -1 || end < begin)) {
+  if ((begin === -1) !== (end === -1) || (begin !== -1 && end < begin)) {
     // An orphan marker means a human (or an old crash) left the file
-    // half-marked: appending would pair the stray begin with our new end
-    // and silently replace everything in between. Refuse loudly.
+    // half-marked: appending would pair the stray marker with our new
+    // block on this or the next run and silently replace everything in
+    // between. Refuse loudly.
+    const stray = begin === -1 ? MARKER_END : MARKER_BEGIN;
     throw new MementoError(
-      `file has an unpaired '${MARKER_BEGIN}' marker — fix or remove it and re-run`,
+      `file has an unpaired '${stray}' marker — fix or remove it and re-run`,
       "UNPAIRED_MARKER",
     );
   }
@@ -85,10 +87,17 @@ export function initAgent(projectDir, agent) {
       } catch {
         throw new MementoError(`invalid JSON in ${file} — fix or remove it and re-run`, "INVALID_JSON");
       }
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) obj = parsed;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        // Replacing a foreign root with `{}` would silently discard it.
+        throw new MementoError(`${file} must contain a JSON object — fix or remove it and re-run`, "INVALID_JSON_SHAPE");
+      }
+      obj = parsed;
     }
     const spec = target.jsonHook;
     const hooks = (obj.hooks ??= {});
+    if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) {
+      throw new MementoError(`'hooks' in ${file} must be a JSON object — fix it and re-run`, "INVALID_JSON_SHAPE");
+    }
     const sessionStart = Array.isArray(hooks.SessionStart) ? hooks.SessionStart : [];
     hooks.SessionStart = [
       ...sessionStart.filter(

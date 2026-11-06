@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { memoryIndexPath } from "../src/index.mjs";
@@ -142,6 +142,7 @@ test("unknown agent exits 2", async () => {
 // --- N7/N9: atomic writes + unpaired markers + crush hint ---
 
 import { readdirSync } from "node:fs";
+import * as fsModule from "node:fs";
 import { writeAtomicSync } from "../src/atomic.mjs";
 import { MementoError } from "../src/init/initAgent.mjs";
 
@@ -168,12 +169,13 @@ test("writeAtomicSync keeps the original when the write dies midway", () => {
   assert.equal(readFileSync(target, "utf8"), "original\n");
 });
 
-test("init run leaves no .tmp residue next to the target", () => {
+test("init run leaves no temp residue next to the target", () => {
   const proj = mkdtempSync(join(tmpdir(), "memento-init-residue-"));
-  initAgent(proj, "gemini");
-  const dirOf = (p) => readdirSync(p.substring(0, p.lastIndexOf("/")));
-  dirOf(join(proj, "GEMINI.md"));
-  assert.ok(readdirSync(proj).every((f) => !f.includes(".tmp")));
+  const result = initAgent(proj, "gemini");
+  assert.equal(result.status, "written");
+  const siblings = readdirSync(dirname(result.file));
+  assert.ok(siblings.includes("GEMINI.md"), `GEMINI.md missing in ${siblings}`);
+  assert.deepEqual(siblings.filter((f) => f.includes("memento-tmp")), []);
 });
 
 test("unpaired begin marker is a loud error, not an append", () => {
@@ -195,4 +197,76 @@ test("end-before-begin markers are also a loud error", () => {
 
 test("crush hint warns that its config file is global", () => {
   assert.match(TARGETS.crush.hint, /global/);
+});
+
+// --- M3: atomic writes must follow symlinks, keep mode, clean up tmp ---
+
+import { chmodSync, lstatSync, mkdirSync, readlinkSync, statSync, symlinkSync } from "node:fs";
+
+test("writeAtomicSync writes through a symlinked target instead of replacing the link", { skip: process.platform === "win32" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "memento-atomic-link-"));
+  const real = join(dir, "dotfiles", "AGENTS.md");
+  mkdirSync(dirname(real));
+  writeFileSync(real, "old\n");
+  const link = join(dir, "AGENTS.md");
+  symlinkSync(real, link);
+  writeAtomicSync(link, "new\n");
+  assert.ok(lstatSync(link).isSymbolicLink(), "symlink must survive");
+  assert.equal(readlinkSync(link), real);
+  assert.equal(readFileSync(real, "utf8"), "new\n");
+  assert.deepEqual(readdirSync(dir).sort(), ["AGENTS.md", "dotfiles"]);
+});
+
+test("writeAtomicSync preserves the existing file mode", { skip: process.platform === "win32" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "memento-atomic-mode-"));
+  const target = join(dir, "settings.json");
+  writeFileSync(target, "{}\n");
+  chmodSync(target, 0o600);
+  writeAtomicSync(target, "{\"a\":1}\n");
+  assert.equal(statSync(target).mode & 0o777, 0o600);
+});
+
+test("writeAtomicSync removes its temp file when the rename fails", () => {
+  const dir = mkdtempSync(join(tmpdir(), "memento-atomic-rename-"));
+  const target = join(dir, "AGENTS.md");
+  writeFileSync(target, "original\n");
+  const { writeFileSync: realWrite, unlinkSync } = fsModule;
+  const fakeFs = {
+    writeFileSync: realWrite,
+    unlinkSync,
+    renameSync: () => {
+      throw new Error("EXDEV");
+    },
+  };
+  assert.throws(() => writeAtomicSync(target, "new\n", { fs: fakeFs }), /EXDEV/);
+  assert.equal(readFileSync(target, "utf8"), "original\n");
+  assert.deepEqual(readdirSync(dir), ["AGENTS.md"]);
+});
+
+// --- M6/M7: end-only marker, malformed JSON shapes ---
+
+test("end marker without begin is an unpaired-marker error, not an append", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-orphan-"));
+  const before = "prose\n<!-- memento:end -->\n";
+  writeFileSync(join(proj, "GEMINI.md"), before);
+  assert.throws(() => initAgent(proj, "gemini"), (err) => err instanceof MementoError && err.code === "UNPAIRED_MARKER");
+  assert.equal(readFileSync(join(proj, "GEMINI.md"), "utf8"), before);
+});
+
+test("json init refuses a non-object root instead of replacing it", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-json-"));
+  mkdirSync(join(proj, ".claude"), { recursive: true });
+  const before = '["not", "an", "object"]\n';
+  writeFileSync(join(proj, ".claude", "settings.json"), before);
+  assert.throws(() => initAgent(proj, "claude-code"), (err) => err instanceof MementoError && err.code === "INVALID_JSON_SHAPE");
+  assert.equal(readFileSync(join(proj, ".claude", "settings.json"), "utf8"), before);
+});
+
+test("json init refuses a non-object hooks field with a MementoError", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-json-"));
+  mkdirSync(join(proj, ".codex"), { recursive: true });
+  const before = '{"hooks": "x"}\n';
+  writeFileSync(join(proj, ".codex", "hooks.json"), before);
+  assert.throws(() => initAgent(proj, "codex"), (err) => err instanceof MementoError && err.code === "INVALID_JSON_SHAPE");
+  assert.equal(readFileSync(join(proj, ".codex", "hooks.json"), "utf8"), before);
 });
