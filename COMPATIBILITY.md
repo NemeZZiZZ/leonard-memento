@@ -12,7 +12,7 @@ What `leonard-memento` promises, how much of that is machine-checked, and what r
 
 ## What CI checks
 
-`npm test` runs on every push and PR — Node 20 and 22 on `ubuntu-latest` and `windows-latest` (`.github/workflows/ci.yml`). ~90 tests:
+`npm test` runs on every push and PR — Node 20 and 22 on `ubuntu-latest` and `windows-latest` (`.github/workflows/ci.yml`). ~125 tests:
 
 | Suite | Covers |
 |---|---|
@@ -28,7 +28,20 @@ Two tests skip on Windows, by design, not neglect: directory-symlink creation ne
 
 ## What CI does not check
 
-No automated test drives a live OpenCode, Claude Code, or Codex process, or any of the 13 snippet targets inside their agents. The hooks are tested at the payload contract level (the JSON each harness documents it passes in and expects back), which catches regressions in our code but not harness-side changes — e.g. an agent renaming a hook event or changing its payload shape. That risk is inherent to hooking into tools we do not ship.
+No automated test drives a live OpenCode, Claude Code, or Codex process, or any of the 12 snippet targets inside their agents. The hooks are tested at the payload contract level (the JSON each harness documents it passes in and expects back), which catches regressions in our code but not harness-side changes — e.g. an agent renaming a hook event or changing its payload shape. That risk is inherent to hooking into tools we do not ship.
+
+## Upstream hook surface (OpenCode, checked 2026-11-06)
+
+- **V1 (1.x)**: `experimental.session.compacting` is still experimental but
+  present through 1.19.x; since 1.3.4 the loader calls `default.server(input,
+  options)` on object exports (see the opencode package README).
+- **V2 (2.x)**: the `compaction` session hook is stable. The `session.compacted`
+  event was removed in 2.1.0 — compaction now emits
+  `session.compaction.started` / `.delta` / `.ended` / `.failed`; nothing in
+  this repo listens to the removed event. 2.2.0 (2026-10-27) added the
+  experimental `ctx.session.instructions.entry.put({ sessionID, key, value })`
+  / `list` / `remove` API — keyed, compaction-surviving instructions. It is a
+  candidate future injection channel, not used yet.
 
 ## Manual E2E checklist
 

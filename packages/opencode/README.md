@@ -22,11 +22,14 @@ coding agent.
 opencode plugin add opencode-memento
 ```
 
-Notes for OpenCode 2.x (verified on OpenChamber 2.0.20): plugins are loaded
-from the **global** config only — `plugins` entries in project-level
-`opencode.json` / `.opencode/opencode.json` are ignored, and local-directory
-entries work via `~/.config/openchamber/opencode.managed.json`. Configure
-via `MEMENTO_*` env vars (the global plugin list carries no options).
+Notes for OpenCode 2.x: `plugins` arrays from the global config and from
+project-level `opencode.json` / `.opencode/opencode.json` are **merged**
+(per the V2 docs); on OpenChamber 2.0.20 the `opencode plugin add` command
+writes the global list, and local-directory entries also work via
+`~/.config/openchamber/opencode.managed.json`. V2 plugin entries carry no
+options, so configure via `MEMENTO_*` env vars. In a git worktree the V2
+`canonical` input is the **main** worktree path, so all worktrees of one
+repository share the main checkout's memory tree.
 
 Restart OpenCode. The plugin injects the project's memory index into every
 provider request (and at compaction), so it survives summarization.
@@ -84,11 +87,16 @@ plugins. That is the design, not a gap:
 
 ## Compatibility
 
-- **OpenCode 1.18.x** — verified live on 1.18.33. V1's loader registers only
-  *function* exports `(input, options?) => hooks`, which is what the named
-  `MementoPlugin` export provides. (Plain object exports are silently
-  ignored — this is why 1.0.0 never fired on V1 — and local auto-discovery
-  matches only `.opencode/plugin(s)/*.ts|*.js`, not `.mjs`.)
+- **OpenCode 1.3.4 – 1.19.x** — the V1 loader checks the default export: when
+  it carries `id` and `server`, the loader calls `default.server(input,
+  options)` and stops there (named exports are not reached). Our `server`
+  forwards both arguments to `MementoPlugin`, so tuple options
+  (`memoryRoot`, `indexFile`) work on every V1 release. Verified live on
+  1.18.33. Local auto-discovery matches only `.opencode/plugin(s)/*.ts|*.js`,
+  not `.mjs`.
+- **OpenCode 1.0 – 1.3.3** — the loader registered only *function* exports
+  `(input, options?) => hooks`; the named `MementoPlugin` export is kept
+  for those releases.
 - **OpenCode 2.x / OpenChamber** — verified live on 2.0.20. The default
   `{ id, setup }` object is required; `setup` registers the same callback
   for the `context` and `compaction` session hooks and pushes into

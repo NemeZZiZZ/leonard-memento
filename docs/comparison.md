@@ -106,6 +106,10 @@ If a tool does a job better than memento, this page loses credibility by hiding 
 - **[mcp-memory-service](https://github.com/doobidoo/mcp-memory-service)** — a full local memory backend: SQLite + sqlite-vec with local ONNX embeddings ("memory never leaves your infrastructure"), hybrid search ranked by recency/frequency, its own benchmark page. What a determined solo maintainer can build — and a single-maintainer bus factor is the trade.
 - **leonard-memento** — determinism, zero deps, the compaction boundary, cross-agent, auditability: a byte-identical injected block, 0 npm dependencies, re-injection at compaction on OpenCode, Claude Code, and Codex first-class (plus 12 snippet targets), one path-hash-keyed tree shared by every agent working in the directory, and a memory you audit with `grep` instead of a SQLite/Chroma pair behind a viewer.
 
+### Hardening (v0.2.1)
+
+Determinism is only worth something if the plumbing is safe, so v0.2.1 closed the gaps a second audit found: configuration is validated loudly (`~`-relative roots and non-basename `indexFile` values are rejected instead of silently pointing the injector at the wrong tree or an arbitrary file), every file memento writes goes through an atomic temp-file + rename (through symlinks, preserving mode), hook stdin is decoded once so non-ASCII project paths hash correctly, and `sync claude` compares timestamps as instants and warns on duplicate fact names. The injected block itself did not change — it is still byte-identical to opencode-memento v1.0.0.
+
 ## Positioning map (2026-11-01)
 
 Ported from a competitive analysis verified 2026-11-01 against the GitHub API, the npm registry, and each project's README/docs; ★ = GitHub stars on that date — treat as a snapshot.

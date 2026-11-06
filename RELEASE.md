@@ -10,7 +10,10 @@ Publishing is deliberately manual. No changesets, no provenance automation.
 ## Per release
 
 1. Bump versions as needed (`packages/*/package.json`).
-2. `npm test` — must be green on Node 20 and 22 (CI covers this).
+2. `npm test` — must be green on Node 20 and 22 (CI covers this). Push
+   first and wait for the **whole** CI matrix (ubuntu + windows) to finish
+   green (`gh run watch`) before tagging — v0.2.1 was tagged on a commit
+   whose Windows job was still running and then failed.
 3. Grep the public docs for version numbers: no README/docs statement may
    reference a version that is not on npm yet (`npm view <pkg> versions`),
    including the version this release is about to publish.
