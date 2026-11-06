@@ -11,16 +11,19 @@ Publishing is deliberately manual. No changesets, no provenance automation.
 
 1. Bump versions as needed (`packages/*/package.json`).
 2. `npm test` — must be green on Node 20 and 22 (CI covers this).
-3. `npm pack --dry-run -w packages/core -w packages/opencode -w packages/claude-code -w packages/codex`
+3. Grep the public docs for version numbers: no README/docs statement may
+   reference a version that is not on npm yet (`npm view <pkg> versions`),
+   including the version this release is about to publish.
+4. `npm pack --dry-run -w packages/core -w packages/opencode -w packages/claude-code -w packages/codex`
    — check each tarball contains only its whitelisted files.
-4. Publish, core first (the adapters depend on it):
+5. Publish, core first (the adapters depend on it):
    ```
    npm publish -w packages/core
    npm publish -w packages/opencode
    npm publish -w packages/claude-code
    npm publish -w packages/codex
    ```
-5. Tag: `git tag vX.Y.Z && git push --tags` (family version = the core
+6. Tag: `git tag vX.Y.Z && git push --tags` (family version = the core
    version being released).
 
 ## Post-release (one-time, after the first family release)

@@ -10,7 +10,7 @@ Claude Code ships with [native auto memory](https://code.claude.com/docs/en/memo
 | Index | `MEMORY.md` — first 200 lines / 25KB loaded at conversation start | `MEMORY.md` — whole injection block at session start **and at every compaction** |
 | Facts | topic `.md` files with front-matter (`type`, `modified`) | topic `.md` files with front-matter (`name`, `description`, `type`, dates) |
 | Keying | `slug` = project's absolute path with `/` → `-` | `hash16` = first 16 hex chars of sha256 of the canonical path |
-| Scope | Claude Code, one machine | any of the 16 supported agents, same tree |
+| Scope | Claude Code, one machine | any of the 15 supported agents, same tree |
 
 Both key the tree to the project's absolute path, so every session in the same directory resolves to the same memory — the conventions are close enough that fact files copy across verbatim.
 

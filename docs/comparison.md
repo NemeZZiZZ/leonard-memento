@@ -92,7 +92,7 @@ Evidence from the wider market, same rules:
 - Vendor churn, realized: [Zep](https://github.com/getzep/zep) deprecated its open-source Community Edition — "no longer supported", moved to `legacy/` ([announcement](https://blog.getzep.com/announcing-a-new-direction-for-zeps-open-source-strategy/)) — and [Letta](https://github.com/letta-ai/letta) (ex-MemGPT) pivoted from memory OS to a coding-agent harness, retiring the old API server to an archive branch ([letta-code](https://github.com/letta-ai/letta-code)). A Markdown tree has no pivot.
 - Memory infrastructure is attack surface: [Graphiti](https://github.com/getzep/graphiti)'s reference MCP server ships with a warning that it has "no authentication, no authorization, and no prompt-injection protection" ([README](https://github.com/getzep/graphiti/blob/main/README.md)). A text file is not.
 
-Honesty about the compaction row: two tools do touch that boundary. [mcp-memory-service](https://github.com/doobidoo/mcp-memory-service) checkpoints "before compaction" via Codex-specific Python hooks, and [Basic Memory](https://github.com/basicmachines-co/basic-memory) ships pre-compaction checkpoints in its Claude Code plugin ([READMEs](https://github.com/doobidoo/mcp-memory-service/blob/main/README.md)). Both are partial — one harness each — where memento makes the boundary its entire product across three first-class CLIs plus 13 snippet targets.
+Honesty about the compaction row: two tools do touch that boundary. [mcp-memory-service](https://github.com/doobidoo/mcp-memory-service) checkpoints "before compaction" via Codex-specific Python hooks, and [Basic Memory](https://github.com/basicmachines-co/basic-memory) ships pre-compaction checkpoints in its Claude Code plugin ([READMEs](https://github.com/doobidoo/mcp-memory-service/blob/main/README.md)). Both are partial — one harness each — where memento makes the boundary its entire product across three first-class CLIs plus 12 snippet targets.
 
 ## Where each tool wins
 
@@ -104,7 +104,7 @@ If a tool does a job better than memento, this page loses credibility by hiding 
 - **[Basic Memory](https://github.com/basicmachines-co/basic-memory)** — structured knowledge plus its own pre-compaction checkpoints: Markdown entities/observations/relations (Obsidian-compatible) indexed by SQLite + FastEmbed, `bm_*` MCP tools, session-start briefings and pre-compaction checkpoints via its Claude Code plugin. The closest philosophical cousin — at the cost of a Python/uv + MCP stack and an optional $15/mo cloud.
 - **[server-memory](https://github.com/modelcontextprotocol/servers/blob/main/src/memory/README.md) (MCP reference)** — the universal scratchpad: a JSONL knowledge graph any MCP client can use, no install beyond `npx`. Its README's example prompt has to script the model to say "Remembering…" — the purest illustration that tool-call memory depends on the model remembering to remember.
 - **[mcp-memory-service](https://github.com/doobidoo/mcp-memory-service)** — a full local memory backend: SQLite + sqlite-vec with local ONNX embeddings ("memory never leaves your infrastructure"), hybrid search ranked by recency/frequency, its own benchmark page. What a determined solo maintainer can build — and a single-maintainer bus factor is the trade.
-- **leonard-memento** — determinism, zero deps, the compaction boundary, cross-agent, auditability: a byte-identical injected block, 0 npm dependencies, re-injection at compaction on OpenCode, Claude Code, and Codex first-class (plus 13 snippet targets), one path-hash-keyed tree shared by every agent working in the directory, and a memory you audit with `grep` instead of a SQLite/Chroma pair behind a viewer.
+- **leonard-memento** — determinism, zero deps, the compaction boundary, cross-agent, auditability: a byte-identical injected block, 0 npm dependencies, re-injection at compaction on OpenCode, Claude Code, and Codex first-class (plus 12 snippet targets), one path-hash-keyed tree shared by every agent working in the directory, and a memory you audit with `grep` instead of a SQLite/Chroma pair behind a viewer.
 
 ## Positioning map (2026-11-01)
 
@@ -124,7 +124,7 @@ Ported from a competitive analysis verified 2026-11-01 against the GitHub API, t
 | [Claude Code native](https://code.claude.com/docs/en/memory) | n/a | auto (auto memory) + manual CLAUDE.md | `~/.claude/projects/<p>/memory/` `MEMORY.md` + topic files | first 200 lines/25KB always | session start | none (built in) | machine-local | Claude Code only |
 | [Anthropic memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool) | n/a | model writes `/memories` | your storage (client-side handler) | model tool calls ("view first" prompt) | on tool call | your app implements handler | yours | Claude API/apps |
 | [AGENTS.md convention](https://agents.md/) | 60k+ repos | human-edited | Markdown in repo | always loaded | session start | none | in-repo | Codex, OpenCode, Cursor, Gemini, Zed, VS Code, Warp, ~20 tools |
-| [leonard-memento](../README.md) | (new) | **curated by human** | flat Markdown outside repo | **always-injected block** | **session start + compaction boundary** | **0 deps, no runtime** | local | OpenCode, Claude Code, Codex + 13 snippet targets |
+| [leonard-memento](../README.md) | (new) | **curated by human** | flat Markdown outside repo | **always-injected block** | **session start + compaction boundary** | **0 deps, no runtime** | local | OpenCode, Claude Code, Codex + 12 snippet targets |
 
 ## Choose by the failure mode you cannot tolerate
 
@@ -135,7 +135,7 @@ Ported from a competitive analysis verified 2026-11-01 against the GitHub API, t
 - **Manual curation itself** → claude-mem or Claude Code's native auto memory is the honest answer; memento will never capture anything for you.
 - **Product-scale personalization** → mem0. **A structured, queryable knowledge base** → Basic Memory.
 
-memento sits beside these tools rather than replacing them. It captures nothing and retrieves nothing; it guarantees that the ~30 lines you curate are present when the summarizer runs — in whichever of the 16 agents you use. Because it is one file read at two moments and nothing else, it does not conflict with a memory system running alongside it: the auto-magic tool can handle recall breadth, memento holds the floor. Insurance, not a memory system.
+memento sits beside these tools rather than replacing them. It captures nothing and retrieves nothing; it guarantees that the ~30 lines you curate are present when the summarizer runs — in whichever of the 15 agents you use. Because it is one file read at two moments and nothing else, it does not conflict with a memory system running alongside it: the auto-magic tool can handle recall breadth, memento holds the floor. Insurance, not a memory system.
 
 ```
 npm i -g @leonard-memento/core
