@@ -125,3 +125,44 @@ test("MEMENTO_INDEX_FILE changes the file name only", () => {
     else process.env.MEMENTO_INDEX_FILE = saved;
   }
 });
+
+// --- N1/N2: root and indexFile validation (loud, not silent amnesia) ---
+
+test("memoryIndexPath rejects '~'-relative memoryRoot instead of hashing the wrong tree", () => {
+  assert.throws(() => memoryIndexPath("/a/b", { memoryRoot: "~/mem" }), /memory root/);
+});
+
+test("memoryIndexPath rejects '~'-relative MEMENTO_MEMORY_ROOT", () => {
+  const saved = process.env.MEMENTO_MEMORY_ROOT;
+  try {
+    process.env.MEMENTO_MEMORY_ROOT = "~/mem";
+    assert.throws(() => memoryIndexPath("/a/b"), /memory root/);
+  } finally {
+    if (saved === undefined) delete process.env.MEMENTO_MEMORY_ROOT;
+    else process.env.MEMENTO_MEMORY_ROOT = saved;
+  }
+});
+
+test("memoryIndexPath rejects indexFile escaping the project memory dir", () => {
+  for (const bad of ["../../etc/passwd", "..\\..\\etc\\passwd", "/etc/passwd", "sub/MEMORY.md", "sub\\MEMORY.md", "~/MEMORY.md", "."]) {
+    assert.throws(() => memoryIndexPath("/a/b", { memoryRoot: "/root", indexFile: bad }), /indexFile/, `indexFile '${bad}' should be rejected`);
+  }
+});
+
+test("memoryIndexPath rejects traversal via MEMENTO_INDEX_FILE", () => {
+  const saved = process.env.MEMENTO_INDEX_FILE;
+  try {
+    process.env.MEMENTO_INDEX_FILE = "../secrets.md";
+    assert.throws(() => memoryIndexPath("/a/b", { memoryRoot: "/root" }), /indexFile/);
+  } finally {
+    if (saved === undefined) delete process.env.MEMENTO_INDEX_FILE;
+    else process.env.MEMENTO_INDEX_FILE = saved;
+  }
+});
+
+test("memoryIndexPath keeps plain index file names working", () => {
+  assert.equal(
+    memoryIndexPath("/a/b", { memoryRoot: "/root", indexFile: "INDEX.md" }),
+    join("/root", projectHash("/a/b"), "INDEX.md"),
+  );
+});

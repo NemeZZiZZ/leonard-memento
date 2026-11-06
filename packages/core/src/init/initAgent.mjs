@@ -1,12 +1,14 @@
 // memento init — idempotent setup of rules-file snippets per agent.
 //
-// Markers make init crash-safe: an interrupted run leaves at worst a
-// half-written marked block that the next run replaces. Nothing outside
-// the markers is ever modified.
+// Writes are crash-safe: content goes to a sibling temp file and is renamed
+// over the target, so an interrupted run leaves either the old or the new
+// file — never a truncated one. Markers make init idempotent: re-runs
+// replace the marked block. Nothing outside the markers is ever modified.
 
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { writeAtomicSync } from "../atomic.mjs";
 import { MARKER_BEGIN, MARKER_END, TARGETS } from "./targets.mjs";
 
 export class MementoError extends Error {
@@ -21,6 +23,15 @@ export class MementoError extends Error {
 function upsertBlock(existing, blockText) {
   const begin = existing.indexOf(MARKER_BEGIN);
   const end = existing.indexOf(MARKER_END);
+  if (begin !== -1 && (end === -1 || end < begin)) {
+    // An orphan marker means a human (or an old crash) left the file
+    // half-marked: appending would pair the stray begin with our new end
+    // and silently replace everything in between. Refuse loudly.
+    throw new MementoError(
+      `file has an unpaired '${MARKER_BEGIN}' marker — fix or remove it and re-run`,
+      "UNPAIRED_MARKER",
+    );
+  }
   if (begin !== -1 && end !== -1 && end > begin) {
     return existing.slice(0, begin) + blockText + existing.slice(end + MARKER_END.length);
   }
@@ -50,7 +61,7 @@ export function initAgent(projectDir, agent) {
       existing = readFileSync(file, "utf8");
     }
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, upsertBlock(existing, target.snippet(projectDir)));
+    writeAtomicSync(file, upsertBlock(existing, target.snippet(projectDir)));
     return { status: "written", file, hint: target.hint };
   }
   if (target.kind === "json") {
@@ -91,7 +102,7 @@ export function initAgent(projectDir, agent) {
     const text =
       JSON.stringify(obj, null, indent) + (raw === "" || raw.endsWith("\n") ? "\n" : "");
     mkdirSync(dirname(file), { recursive: true });
-    if (text !== raw) writeFileSync(file, text);
+    if (text !== raw) writeAtomicSync(file, text);
     return { status: "written", file, hint: target.hint };
   }
   if (target.kind === "print") {

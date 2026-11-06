@@ -16,11 +16,12 @@
 //   - index files are only APPENDED to (missing `[[name]]` lines) — manual
 //     ordering, sections and prose stay byte-for-byte.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { canonicalDir, projectHash, resolveMemoryRoot } from "./paths.mjs";
+import { writeAtomicSync } from "./atomic.mjs";
 
 /** Claude Code's project folder slug: absolute path with separators as dashes. */
 export function claudeProjectSlug(projectDir) {
@@ -56,9 +57,17 @@ function parseFrontmatter(text) {
   return fm;
 }
 
+/** Instant-aware string compare for ISO stamps; lexicographic fallback for junk. */
+function tsCompare(a, b) {
+  const pa = Date.parse(a);
+  const pb = Date.parse(b);
+  if (!Number.isNaN(pa) && !Number.isNaN(pb)) return pa < pb ? -1 : pa > pb ? 1 : 0;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** Effective fact age: the newest of `updated` / `modified` (ISO string, "" when unknown). */
 function factTimestamp(fm) {
-  const stamps = [fm.updated, fm.modified].filter(Boolean).sort();
+  const stamps = [fm.updated, fm.modified].filter(Boolean).sort(tsCompare);
   return stamps[stamps.length - 1] ?? "";
 }
 
@@ -79,7 +88,7 @@ function descriptionOf(fact) {
  * Load every fact file from a memory tree (anything *.md except MEMORY.md).
  * Returns null when the directory does not exist, never throws.
  */
-function loadFacts(dir) {
+function loadFacts(dir, warnings = []) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -97,6 +106,12 @@ function loadFacts(dir) {
     }
     const { fm, body } = parseFactFile(raw);
     const name = fm.name || entry.name.replace(/\.md$/, "");
+    const prev = facts.get(name);
+    if (prev) {
+      warnings.push(
+        `duplicate fact name '${name}' from files '${prev.file}' and '${entry.name}' — the later file wins and the other is never synced; rename one of them`,
+      );
+    }
     facts.set(name, { file: entry.name, raw, fm, body, ts: factTimestamp(fm) });
   }
   return facts;
@@ -127,7 +142,7 @@ function appendMissingIndexLines(indexPath, facts, { header } = {}) {
   const updated = content.trim()
     ? content.replace(/\r?\n?$/, "\n") + freshLines
     : (header ? header + "\n\n" : "") + freshLines;
-  writeFileSync(indexPath, updated);
+  writeAtomicSync(indexPath, updated);
   return { appended: missing, lines: updated.split(/\r?\n/).length };
 }
 
@@ -150,19 +165,19 @@ export function syncClaude(projectDir, {
 
   const report = { dryRun, claudeDir: claudeMemory, mementoDir, actions: [], warnings: [], error: null };
 
-  const claudeFacts = loadFacts(claudeMemory);
+  const claudeFacts = loadFacts(claudeMemory, report.warnings);
   if (claudeFacts === null) {
     report.error =
       `no Claude Code memory at ${claudeMemory} — open Claude Code in this project once ` +
       `(so it creates auto memory), or pass --claude-dir`;
     return report;
   }
-  const mementoFacts = loadFacts(mementoDir) ?? new Map();
+  const mementoFacts = loadFacts(mementoDir, report.warnings) ?? new Map();
 
   const write = (path, raw) => {
     if (dryRun) return true;
     try {
-      writeFileSync(path, raw);
+      writeAtomicSync(path, raw);
       return true;
     } catch (err) {
       report.warnings.push(`could not write ${path}: ${err.message}`);
@@ -200,7 +215,7 @@ export function syncClaude(projectDir, {
       } else if (claudeFact.ts === mementoFact.ts) {
         report.warnings.push(`conflict on '${name}': both sides changed (same timestamp) — edit one side and re-run`);
       } else {
-        const newerIsClaude = claudeFact.ts > mementoFact.ts;
+        const newerIsClaude = tsCompare(claudeFact.ts, mementoFact.ts) > 0;
         const newer = newerIsClaude ? claudeFact : mementoFact;
         const olderPath = newerIsClaude ? join(mementoDir, mementoFact.file) : join(claudeMemory, claudeFact.file);
         if (write(olderPath, newer.raw)) {

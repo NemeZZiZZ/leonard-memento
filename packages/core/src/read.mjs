@@ -11,8 +11,9 @@ import { memoryIndexPath } from "./paths.mjs";
  * Read the memory index to inject at compaction time.
  * Returns null when the project has no memory yet — silence is correct.
  * Any read/parse failure degrades to null: never crash the host.
- * (Exception: '~'-relative directories throw — see projectHash. Adapters
- * catch everything, so a bad path stays loud for the caller, not the host.)
+ * (Exceptions that stay loud for the caller: '~'-relative or invalid
+ * memory roots and non-plain indexFile names — see memoryIndexPath.
+ * Adapters catch everything, so hosts stay safe either way.)
  */
 export async function readProjectIndex(directory, { memoryRoot, indexFile } = {}) {
   const indexPath = memoryIndexPath(directory, { memoryRoot, indexFile });

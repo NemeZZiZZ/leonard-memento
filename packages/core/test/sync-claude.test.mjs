@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { realpathSync } from "node:fs";
 import test from "node:test";
 
-import { claudeMemoryDir, claudeProjectSlug, parseFactFile, syncClaude } from "../src/index.mjs";
+import { claudeMemoryDir, claudeProjectSlug, parseFactFile, projectHash, syncClaude } from "../src/index.mjs";
 
 let tmpRoot;
 function freshDir(label) {
@@ -189,4 +189,41 @@ test("parseFactFile handles front-matter, plain markdown and quoted values", () 
   const plain = parseFactFile("# just markdown\n");
   assert.deepEqual(plain.fm, {});
   assert.equal(plain.body, "# just markdown\n");
+});
+
+// --- N5/N6: instant-aware timestamps + duplicate fact names ---
+
+test("newer-wins compares instants, not timestamp strings", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  // 10:00+03:00 == 07:00Z: the OLDER instant, but lexicographically larger.
+  writeFileSync(join(claudeDir, "note.md"), "---\nupdated: 2026-11-01T10:00:00+03:00\n---\nclaude side\n");
+  const mementoDir = join(tmpRoot, "memento", projectHash(proj));
+  mkdirSync(mementoDir, { recursive: true });
+  // 08:00Z: the NEWER instant, but lexicographically smaller.
+  writeFileSync(join(mementoDir, "note.md"), "---\nupdated: 2026-11-01T08:00:00Z\n---\nmemento side\n");
+
+  const report = syncClaude(proj, { claudeDir, memoryRoot: join(tmpRoot, "memento") });
+
+  assert.equal(report.error, null);
+  const action = report.actions.find((a) => a.name === "note");
+  assert.deepEqual([action.direction, action.target], ["updated", "claude"]);
+  assert.equal(readFileSync(join(claudeDir, "note.md"), "utf8").includes("memento side"), true);
+});
+
+test("duplicate fact names in one tree produce a warning", () => {
+  const proj = mkdirSync(join(tmpRoot, "proj"), { recursive: true });
+  const claudeDir = join(tmpRoot, "claude-memory");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "a.md"), "---\nname: shared\n---\nfirst\n");
+  writeFileSync(join(claudeDir, "b.md"), "---\nname: shared\n---\nsecond\n");
+
+  const report = syncClaude(proj, { claudeDir, memoryRoot: join(tmpRoot, "memento") });
+
+  assert.equal(report.error, null);
+  assert.ok(
+    report.warnings.some((w) => /duplicate fact name 'shared'/.test(w)),
+    `expected a duplicate-name warning, got: ${JSON.stringify(report.warnings)}`,
+  );
 });

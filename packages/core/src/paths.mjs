@@ -47,6 +47,22 @@ export function resolveMemoryRoot({ env = process.env, home = homedir(), exists 
 /** Absolute path of the memory index for a project directory. */
 export function memoryIndexPath(directory, { memoryRoot, indexFile } = {}) {
   const root = memoryRoot ?? process.env.MEMENTO_MEMORY_ROOT ?? resolveMemoryRoot();
+  if (typeof root === "string" && root.startsWith("~")) {
+    // Same failure class projectHash guards against: nothing expands '~',
+    // so joining the literal would silently resolve the WRONG tree. Fail
+    // loudly — every adapter hook wraps reads in try/catch, hosts stay safe.
+    throw new Error(
+      `memento: '~'-relative memory root is not supported, pass an absolute path: '${root}'`,
+    );
+  }
   const file = indexFile ?? process.env.MEMENTO_INDEX_FILE ?? "MEMORY.md";
+  if (typeof file !== "string" || file === "" || file === "." || file === ".." || file.includes("/") || file.includes("\\") || file.startsWith("~")) {
+    // Basename only: an indexFile with separators or traversal could point
+    // outside the project's memory dir (options arrive from plugin config
+    // in cloned repos), and the file content goes straight into the prompt.
+    throw new Error(
+      `memento: indexFile must be a plain file name (no path separators, traversal, or '~'): '${file}'`,
+    );
+  }
   return join(root, projectHash(directory), file);
 }

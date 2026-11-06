@@ -58,7 +58,7 @@ export const TARGETS = {
     kind: "text",
     file: () => join(homedir(), ".config", "crush", "CRUSH.md"),
     snippet: genericSnippet,
-    hint: "Crush includes ~/.config/crush/CRUSH.md in its system prompt — restart it.",
+    hint: "Crush includes the global ~/.config/crush/CRUSH.md in its system prompt — restart it. Note: that file is global (one project per machine); running init crush in another project replaces this project's pointer.",
   },
   cursor: {
     kind: "text",

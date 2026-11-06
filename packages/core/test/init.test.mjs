@@ -138,3 +138,61 @@ test("unknown agent exits 2", async () => {
   assert.equal(r.code, 2);
   assert.ok(r.stderr.length > 0);
 });
+
+// --- N7/N9: atomic writes + unpaired markers + crush hint ---
+
+import { readdirSync } from "node:fs";
+import { writeAtomicSync } from "../src/atomic.mjs";
+import { MementoError } from "../src/init/initAgent.mjs";
+
+test("writeAtomicSync writes content and leaves no temp files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "memento-atomic-"));
+  const target = join(dir, "AGENTS.md");
+  writeFileSync(target, "old\n");
+  writeAtomicSync(target, "new\n");
+  assert.equal(readFileSync(target, "utf8"), "new\n");
+  assert.deepEqual(readdirSync(dir), ["AGENTS.md"]);
+});
+
+test("writeAtomicSync keeps the original when the write dies midway", () => {
+  const dir = mkdtempSync(join(tmpdir(), "memento-atomic-"));
+  const target = join(dir, "AGENTS.md");
+  writeFileSync(target, "original\n");
+  const brokenFs = {
+    writeFileSync: () => {
+      throw new Error("disk full");
+    },
+    renameSync: () => assert.fail("rename must not run after a failed write"),
+  };
+  assert.throws(() => writeAtomicSync(target, "new\n", { fs: brokenFs }), /disk full/);
+  assert.equal(readFileSync(target, "utf8"), "original\n");
+});
+
+test("init run leaves no .tmp residue next to the target", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-residue-"));
+  initAgent(proj, "gemini");
+  const dirOf = (p) => readdirSync(p.substring(0, p.lastIndexOf("/")));
+  dirOf(join(proj, "GEMINI.md"));
+  assert.ok(readdirSync(proj).every((f) => !f.includes(".tmp")));
+});
+
+test("unpaired begin marker is a loud error, not an append", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-orphan-"));
+  writeFileSync(join(proj, "GEMINI.md"), "prose\n<!-- memento:begin -->\nstray content\n");
+  assert.throws(
+    () => initAgent(proj, "gemini"),
+    (err) => err instanceof MementoError && err.code === "UNPAIRED_MARKER",
+  );
+  // The stray file is untouched — no silent append happened.
+  assert.equal(readFileSync(join(proj, "GEMINI.md"), "utf8"), "prose\n<!-- memento:begin -->\nstray content\n");
+});
+
+test("end-before-begin markers are also a loud error", () => {
+  const proj = mkdtempSync(join(tmpdir(), "memento-init-orphan-"));
+  writeFileSync(join(proj, "GEMINI.md"), "<!-- memento:end -->\n<!-- memento:begin -->\n");
+  assert.throws(() => initAgent(proj, "gemini"), (err) => err.code === "UNPAIRED_MARKER");
+});
+
+test("crush hint warns that its config file is global", () => {
+  assert.match(TARGETS.crush.hint, /global/);
+});

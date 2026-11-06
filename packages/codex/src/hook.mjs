@@ -27,14 +27,22 @@ export async function buildHookOutput(payload) {
 
 /** stdin → buildHookOutput → stdout. Every path exits silently on junk input. */
 export async function runHook({ input = process.stdin, output = process.stdout } = {}) {
-  let raw = "";
-  for await (const chunk of input) raw += chunk;
+  // Collect chunks as buffers and decode once: per-chunk `+=` decodes each
+  // buffer independently and corrupts a multi-byte codepoint split across
+  // pipe chunks (a non-ASCII project path would silently hash wrong).
+  const chunks = [];
+  for await (const chunk of input) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   let payload;
   try {
-    payload = JSON.parse(raw);
+    payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     return;
   }
-  const result = await buildHookOutput(payload);
+  let result;
+  try {
+    result = await buildHookOutput(payload);
+  } catch {
+    return;
+  }
   if (result) output.write(JSON.stringify(result) + "\n");
 }
