@@ -17,7 +17,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@leonard-memento/core": "*"
+    "@leonard-memento/core": "^0.2.1"
   },
   "keywords": [
     "opencode",
